@@ -1,0 +1,504 @@
+---
+title: "R Notebook"
+author: "Rita Miller"
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+---
+
+```{r}
+library(nnet)
+library(NeuralNetTools) #visualize model using the plot net function, which is in the package neural net tools.
+library(caret)
+library(dplyr)
+library(readr)
+library(FNN)
+library(ggplot2)# for visuals
+library(ggformula)
+library(gridExtra)
+library(ggdendro)
+library(cluster) # clustering algorithms 
+library(factoextra) # clustering algorithms & visualization
+```
+############# Review data #############
+```{r}
+df = read_csv("CMS_COVID-19_Nursing_Home_Dataset.csv")
+dim(df) #12417 obs 120 variables
+#str(df)
+#summary(df)
+#colnames(df)
+```
+#############Data Cleaning #############
+```{r}
+# encode empty strings as NA 
+df[df==''] <- NA
+
+# remove sparse columns by threshold
+sparsity_threshold=0.1
+df_clean<-df[sapply(df, FUN = function(x) sum(is.na(x))/length(x)) <= sparsity_threshold]
+
+#Eliminate missing values completely from the entire dataframe
+df_complete <-df_clean[complete.cases(df_clean),]
+```
+#1. Principal Component Analysis and Hierarchial Clustering (Unsupervised Learning)
+```{r}
+x <- df_complete%>%
+dplyr::select(-c("Week Ending", "Federal Provider Number", "Provider Name", "Provider Address", "Provider City", "Provider State", "Provider Zip Code", "Submitted Data", "Passed Quality Assurance Check",  "Number of All Beds",  "Total Number of Occupied Beds",  "Shortage of Nursing Staff", "Shortage of Clinical Staff", "Shortage of Aides", "Shortage of Other Staff",  "Ventilator Dependent Unit", "Total Resident Confirmed COVID-19 Cases Per 1,000 Residents",  "Total Resident COVID-19 Deaths Per 1,000 Residents",  "Three or More Confirmed COVID-19 Cases This Week or Initial Confirmed COVID-19 Case this Week", "County", "Geolocation", "Initial Confirmed COVID-19 Case This Week", "Weekly Resident Confirmed COVID-19 Cases Per 1,000 Residents",  "Weekly Resident COVID-19 Deaths Per 1,000 Residents", "Reporting Interval"))
+```
+```{r}
+names(x) #verify variables of interest 
+```
+```{r}
+n = dim(x)[1]
+p = dim(x)[2]
+```
+```{r}
+#standardize variables to mean 0 and sd = 1 
+apply(x, 2, mean)#means #Standardization
+apply(x, 2, var)#variances #Normalization
+```
+```{r}
+# histograms of 15 selected variables
+plot1 <- x %>%
+  ggplot(aes(x=`Residents Total Confirmed COVID-19`)) +
+ geom_histogram( color="blue", alpha=0.6, bins = 15, position = 'identity')
+plot1
+```
+```{r}
+plot2 <- x %>%
+  ggplot( aes(x=`Residents Total COVID-19 Deaths`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot2
+```  
+```{r}
+plot3 <- x %>%
+  ggplot( aes(x=`Staff Total Confirmed COVID-19`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot3
+```
+```{r}
+plot4 <- x %>%
+  ggplot( aes(x=`Staff Total COVID-19 Deaths`)) +
+  geom_histogram( color="green", alpha=0.6, bins = 15, position = 'identity')
+plot4
+```
+```{r}
+plot5 <- x %>%
+  ggplot( aes(x=`Residents Weekly Admissions COVID-19`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot5
+```
+```{r}
+plot6 <- x %>%
+  ggplot( aes(x=`Residents Total Admissions COVID-19`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot6
+```
+```{r}
+plot7 <- x %>%
+  ggplot( aes(x=`Residents Weekly Confirmed COVID-19`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot7
+```
+```{r}
+plot8 <- x %>%
+  ggplot( aes(x=`Residents Total Suspected COVID-19`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot8
+```
+```{r}
+plot9 <- x %>%
+  ggplot( aes(x=`Residents Weekly All Deaths`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot9
+```
+```{r}
+plot10 <- x %>%
+  ggplot( aes(x=`Residents Total All Deaths`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot10
+```
+```{r}
+plot11 <- x %>%
+  ggplot( aes(x=`Residents Weekly COVID-19 Deaths`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot11
+```
+```{r}
+plot12 <- x %>%
+  ggplot( aes(x=`Staff Weekly Confirmed COVID-19`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot12
+```
+```{r}
+plot13 <- x %>%
+  ggplot( aes(x=`Staff Weekly Suspected COVID-19`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot13
+```
+```{r}
+plot14 <- x %>%
+  ggplot( aes(x=`Staff Total Suspected COVID-19`)) +
+  geom_histogram( color="blue4", alpha=0.6, bins = 15, position = 'identity')
+plot14
+```
+```{r}
+plot15 <- x %>%
+  ggplot( aes(x=`Staff Weekly COVID-19 Deaths`)) +
+  geom_histogram( color="blueviolet", alpha=0.6, bins = 15, position = 'identity')
+plot15
+```
+#grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, plot7, plot8, plot9, plot10, plot11, plot12, plot13, plot14, plot15, ncol = 2, nrow=15) 
+```
+```{r}
+# Variables are all R-skewed, so scaling visibly required to allow all predictors to contribute to similarity measure
+x.scale = scale(x) #scale df
+```
+######################################################
+############ Fitting Principal Components ############
+######################################################
+```{r}
+#Principal Component Analysis
+pr.info = prcomp(x, center=T, scale=T) #by default, prcomp()centers variables to mean 0, scale=TRUE scales to have sd = 1. 
+names(pr.info) #a number of useful quantities
+pr.info$center #center/scale corresponds to the means and sd used for scaling prior 2 doing PCA
+pr.info$rotation #provides the principal component loadings, each col has the PC loading vector
+dim(pr.info$x)#columns of PC score vector, #11610 15
+# plotting score vectors + loadings of first two principal components
+biplot(pr.info, choices=1:2, scale=0)
+```
+############# PC summary of variance ############# 
+```{r}
+summary(pr.info) # min(n-1,p) is number of components explaining variance (proportion of variance  > 0)
+```
+```{r}
+summary(pr.info)$importance
+plot(pr.info)
+```
+```{r}
+# cumulative PVE by direct computation
+ pr.info$sdev #to access standard deviation
+  vjs = pr.info$sdev^2 #variance explained by each Principal Component
+  pve = vjs/sum(vjs); pve #proportion of variance explained by each PC
+  cumsum(pve)  #Explanation: the 1st PC explains 27% of variance in the data..., cumsum() computes the cum sum of the elements of a numeric vector
+
+  # cumulative PVE directly from output
+CumulativePVE <- summary(pr.info)$importance[2,]; CumulativePVE
+
+#plot the pve explained by each PC, as well as the cumulative PVE
+plot(CumulativePVE, type = "o", ylab="Cumulative PVE", xlab="Figure 2: Principal Component", main = 'Scree Plot')
+```
+######################################################
+############# Fitting hierarchical models ############
+######################################################
+```{r}
+# Euclidean distance(as the dissimilarity measure)
+dist.x.scale = dist(x.scale, method = "euclidean")
+############# complete  linkage ############
+# using selected p = 3 measurements
+hc.fit = hclust(dist.x.scale, method = "complete")  # Euclidean
+linktype = "Complete Linkage"
+#plot(hc.fit) #plots in BW
+# distance at which merge via complete linkage occurs
+hc.fit$height
+hc.4321 = hc.fit$height[(n-4):(n-1)]
+hc.avg = (hc.fit$height[(n-3):(n-1)]+hc.fit$height[(n-4):(n-2)])/2
+
+# obtaining cluster labels
+hc.fit$height[(n-4):(n-1)]
+nclust=4 
+htclust = mean(hc.fit$height[(n-2):(n-1)])
+membclust = cutree(hc.fit,k=nclust) # cutree(hc.fit,h = htclust)
+
+dend.form = as.dendrogram(hc.fit)
+dend.merge <- ggdendrogram(dend.form, rotate = F,labels=F) + 
+  labs(title = linktype) +
+  geom_hline(yintercept=hc.4321, linetype="dashed", 
+             color = c("red","blue","gold3","gray"))  
+dend.merge 
+dend.merge +
+  geom_hline(yintercept=hc.avg, size = 2,
+             color = c(rgb(.5,0,1,0.5),rgb(.5,1,0,0.5),rgb(.5,.5,.2,0.5))) 
+```
+```{r}
+############# single  linkage ############
+# using selected p = 4 measurements
+hc.fit = hclust(dist.x.scale,method="single")
+linktype = "Single Linkage"
+#plot(hc.fit) #plots in BW
+# distance at which merge via complete linkage occurs
+hc.fit$height
+hc.4321 = hc.fit$height[(n-4):(n-1)]
+hc.avg = (hc.fit$height[(n-3):(n-1)]+hc.fit$height[(n-4):(n-2)])/2
+
+# obtaining cluster labels
+hc.fit$height[(n-4):(n-1)]
+nclust=4
+htclust = mean(hc.fit$height[(n-2):(n-1)])
+membclust = cutree(hc.fit,k=nclust) # cutree(hc.fit,h = htclust)
+
+dend.form = as.dendrogram(hc.fit)#visualize in dendrogram
+dend.merge <- ggdendrogram(dend.form, rotate = F,labels=F) + 
+  labs(title = linktype) +
+  geom_hline(yintercept=hc.4321, linetype="dashed", 
+             color = c("red","blue","gold3","gray"))  
+dend.merge 
+dend.merge +
+  geom_hline(yintercept=hc.avg, size = 2,
+             color = c(rgb(.5,0,1,0.5),rgb(.5,1,0,0.5),rgb(.5,.5,.2,0.5))) 
+```
+```{r}
+############# average  linkage ############
+# using selected p = 4 measurements
+hc.fit = hclust(dist.x.scale,method="average")
+linktype = "Average Linkage"
+#plot(hc.fit) #plots in BW
+# distance at which merge via complete linkage occurs
+hc.fit$height
+hc.4321 = hc.fit$height[(n-4):(n-1)]
+hc.avg = (hc.fit$height[(n-3):(n-1)]+hc.fit$height[(n-4):(n-2)])/2
+
+# obtaining cluster labels
+hc.fit$height[(n-4):(n-1)]
+nclust=4
+htclust = mean(hc.fit$height[(n-2):(n-1)])
+membclust = cutree(hc.fit,k=nclust) # cutree(hc.fit,h = htclust)
+ 
+dend.form = as.dendrogram(hc.fit)#visualize in dendrogram
+dend.merge <- ggdendrogram(dend.form, rotate = F,labels=F) + 
+  labs(title = linktype) +
+  geom_hline(yintercept=hc.4321, linetype="dashed", 
+             color = c("red","blue","gold3","gray"))  
+dend.merge 
+dend.merge +
+  geom_hline(yintercept=hc.avg, size = 2,
+             color = c(rgb(.5,0,1,0.5),rgb(.5,1,0,0.5),rgb(.5,.5,.2,0.5))) 
+```
+```{r}
+#kmeans
+set.seed(123)
+Kcluster <- kmeans(x, centers = 2, nstart = 25)#data into two clusters (centers = 2)
+print(Kcluster)#The kmeans function also has an nstart option that attempts multiple initial configurations and reports on the best one
+```
+```{r}
+#visualization
+fviz_cluster(Kcluster, data = x)
+```
+```{r}
+#############  scatterplot pairs of 15 selected variables #############  
+row.names(x)
+pairs1 <- x %>%
+  ggplot(aes(y=`Residents Weekly Admissions COVID-19`,x=as.numeric(row.names(x)))) + 
+  geom_point(color=membclust)
+pairs1
+```
+```{r}
+pairs2 <- x %>%
+  ggplot( aes(y=`Residents Total Admissions COVID-19`, x=as.numeric(row.names(x))))  +
+  geom_point( color=membclust)
+pairs2
+```
+```{r}
+pairs3 <- x %>%
+  ggplot( aes(y=`Residents Weekly Confirmed COVID-19`, x=as.numeric(row.names(x))))  +
+  geom_point( color=membclust)
+pairs3
+```
+```{r}
+pairs4 <- x %>%
+  ggplot( aes(y=`Residents Total Confirmed COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs4
+```
+```{r}
+pairs5 <- x %>%
+  ggplot( aes(y=`Residents Total Suspected COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs5
+```
+```{r}
+pairs6 <- x %>%
+  ggplot( aes(y=`Residents Weekly All Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust) 
+pairs6
+```
+```{r}
+pairs7 <- x %>%
+  ggplot( aes(y=`Residents Total All Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs7
+```
+```{r}
+pairs8 <- x %>%
+  ggplot( aes(y=`Residents Weekly COVID-19 Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs8
+```
+```{r}
+pairs9 <- x %>%
+  ggplot( aes(y=`Residents Total COVID-19 Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs9
+```
+```{r}
+pairs10 <- x %>%
+  ggplot( aes(y=`Staff Weekly Confirmed COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs10
+```
+```{r}
+pairs11 <- x %>%
+  ggplot( aes(y=`Staff Total Confirmed COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs11
+```
+```{r}
+pairs12 <- x %>%
+  ggplot( aes(y=`Staff Weekly Suspected COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs12
+```
+```{r}
+pairs13 <- x %>%
+  ggplot( aes(y=`Staff Total Suspected COVID-19`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs13
+```
+```{r}
+pairs14 <- x %>%
+  ggplot( aes(y=`Staff Weekly COVID-19 Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs14
+```
+```{r}
+pairs15 <- x %>%
+  ggplot( aes(y=`Staff Total COVID-19 Deaths`, x=as.numeric(row.names(x))))  + 
+  geom_point( color=membclust)
+pairs15
+```
+#grid.arrange(pairs1, pairs2, pairs3, pairs4, pairs5, pairs6, pairs7, pairs8, pairs9, pairs10, pairs11, pairs12, pairs13, pairs14, pairs15, ncol =2, nrow=15)
+```
+#Artificial Neural Network (Supervised Learning)
+```{r}
+ANN <- df_complete%>%
+dplyr::select(-c("Week Ending", "Federal Provider Number", "Provider Name", "Provider Address", "Provider City", "Provider State", "Provider Zip Code", "Submitted Data", "Passed Quality Assurance Check",  "Number of All Beds",  "Total Number of Occupied Beds",  "Shortage of Nursing Staff", "Shortage of Clinical Staff", "Shortage of Aides", "Shortage of Other Staff",  "Ventilator Dependent Unit", "Total Resident Confirmed COVID-19 Cases Per 1,000 Residents",  "Total Resident COVID-19 Deaths Per 1,000 Residents",  "Three or More Confirmed COVID-19 Cases This Week or Initial Confirmed COVID-19 Case this Week", "County", "Geolocation", "Initial Confirmed COVID-19 Case This Week", "Weekly Resident Confirmed COVID-19 Cases Per 1,000 Residents",  "Weekly Resident COVID-19 Deaths Per 1,000 Residents", "Reporting Interval"))
+```
+```{r}
+#standardize variables to mean 0 and sd = 1 
+apply(ANN, 2, mean)#means #Standardization
+apply(ANN, 2, var)#variances #Normalization
+```
+#a.	Conduct a single layer of validation on the supervised learning technique.  
+```{r}
+#Set up training method
+data_used = ANN
+set.seed(123)
+ctrl = trainControl(method = "cv", number = 10) #10-fold cross validation
+fit_covid = train(`Residents Total COVID-19 Deaths` ~.,
+             data = data_used,
+             method = "nnet",
+             tuneGrid = expand.grid(size = 5, decay = seq(1, 2, by = .1)), #5 hidden nodes, select best decay rate
+             preProc = c("center", "scale"), #center and scale data
+             linout = TRUE,
+             maxit = 2000,
+             trace = FALSE,
+             trControl = ctrl)
+fit_covid 
+```
+```{r}
+fit_covid$finalModel$convergence #to check for convergence --->0? yes!!!!
+```
+#Graph the RMSE as a function of lambda and indicate the value of lambda that optimize the RMSE. 
+```{r}
+fit_covid$results %>% #graph the RMSE as a function of the size and the decay parameter.
+  gf_point(RMSE ~ size, col =~ factor(decay))
+optimisezed_rmse <- fit_covid$results %>% slice(which.min(fit_covid$results$RMSE))
+opt_decay <- optimisezed_rmse[1,"decay"]
+opt_rmse <-  optimisezed_rmse[1,"RMSE"]
+fit_covid$results %>%
+  gf_point(RMSE ~ decay, col =~ factor(decay))%>%
+  gf_vline(xintercept = opt_decay, color = "blue") %>%
+  gf_vline(xintercept = opt_decay, color = "blue") %>%
+  gf_hline(yintercept = opt_rmse, color = "green") %>%
+  gf_label((opt_rmse +5)~ opt_decay, label = paste("Optimum size = ", opt_decay), color = "black") 
+```
+#Plot Neural Network with labelled edges and weights
+```{r}
+summary(fit_covid)#view weights of each edge
+```
+
+```{r}
+    par(mar = c(5, 4, 4, 2) + 0.1) # Use default margins to make the axes visible
+    plotnet(fit_covid)
+    axis(1, at = seq(-1, 1, by = .1))
+    axis(2, at = seq(0, 1, by = .1))
+```
+#b.	Conduct an outer layer of validation, containing all of the ANN.   
+```{r}
+set.seed(123)
+n = dim(ANN)[1]
+ngroups = 10 # 10-fold outer CV
+groups = rep(1:ngroups, length = n)#produces list of group labels
+cv_groups = sample(groups, n)#orders randomly
+ctrl = trainControl(method = "cv")
+preds = vector(length = n)#store the predicted regions (it should have length = the number of rows in the data set
+best_model = numeric(length = ngroups)
+for(ii in 1:ngroups){
+ groupii = (cv_groups == ii)
+ train_set = ANN[!groupii, ]
+ test_set = ANN[groupii, ]
+ data_used = train_set
+ fit = train(`Residents Total COVID-19 Deaths` ~.,
+             data = data_used,
+             method = "nnet",
+             tuneGrid = expand.grid(size = 5, decay = seq(1, 2, by = .1)), 
+             preProc = c("center", "scale"),
+             linout = TRUE,
+             maxit = 2000,
+             trace = FALSE,
+             trControl = ctrl)
+ 
+ best_model[ii] = fit$bestTune[[1]]
+ preds[groupii] = predict(fit, newdata = test_set)
+}
+fit$bestTune
+best_model #5 5 5 5 5 5 5 5 5 5 
+```
+```{r}
+#Assess the performance of the model, #Fit the model on the entire data set.
+#fit_covid
+fit_covid$results
+fit_covid$results$RMSE
+min(fit_covid$results$RMSE)
+fit_covid$bestTune#the best final model 
+fit_covid$finalModel #to select one best model
+```
+
+```{r}
+olden(fit_covid)
+#To view the variable importance of this model, we could use a Garson plot or the var imp function from the caret package. But another option is an olden plot using the function olden available in the neural net tools package. This algorithm not only shows us the magnitude of the variable importance, but also shows us the direction of the association between the predictor variable and the response.
+```
+#Apply Garson's algorithm to show variables that are most important for prediction
+```{r}
+garson(fit_covid) + theme(axis.text.x = element_text(angle = 45))
+```
+```{r}
+varImp(fit_covid)
+```
+```{r}
+#lekprofile gives us an understanding of the relationship between each predictor variable and their response.
+colnames(data_used) <- make.names(names(data_used))
+fit_covid_lek = train(Residents.Total.COVID.19.Deaths ~ .,
+             data = data_used,
+             method = "nnet",
+             tuneGrid = expand.grid(size = 5, decay = seq(1, 2, by = .1)), 
+             linout = TRUE,
+             maxit = 2000,
+             trace = FALSE,
+             trControl = ctrl)
+plot <-lekprofile(fit_covid_lek)
+plot + facet_wrap(plot$data$exp_name ~.,nrow=4) + theme(strip.text.x=element_text(size=5))
+```
+#la fin
+
